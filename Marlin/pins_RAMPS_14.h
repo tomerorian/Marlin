@@ -294,3 +294,9 @@
 #ifndef KILL_PIN
   //  #define KILL_PIN         -1
 #endif
+
+#if ENABLED(TEMP_STAT_LEDS)
+    #define STAT_LED_GREEN  4
+    #define STAT_LED_RED 5
+    #define STAT_LED_BLUE  6
+#endif

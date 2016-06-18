@@ -81,6 +81,8 @@
   #include "twibus.h"
 #endif
 
+#include "statusLEDsLogic.h"
+
 /**
  * Look here for descriptions of G-codes:
  *  - http://linuxcnc.org/handbook/gcode/g-code.html
@@ -7044,6 +7046,28 @@ void process_next_command() {
       gcode_T(codenum);
       break;
 
+    // Utility codes
+    case 'U':
+      switch (codenum) {
+        case 1: // Flash RGB lights :)
+          status_leds_flash_leds();
+          break;
+          
+        case 2: // Forced color
+          status_leds_force_color(code_seen('R') ? (byte)code_value_short() : 0, 
+                                  code_seen('G') ? (byte)code_value_short() : 0, 
+                                  code_seen('B') ? (byte)code_value_short() : 0);
+         
+          break;
+
+        case 3: // Disable forced color
+          status_leds_disable_force_color();
+
+          break;
+      }
+      
+      break;
+
     default: code_is_good = false;
   }
 
@@ -7687,31 +7711,6 @@ void plan_arc(
   }
 
 #endif // SCARA
-
-#if ENABLED(TEMP_STAT_LEDS)
-
-  static bool red_led = false;
-  static millis_t next_status_led_update_ms = 0;
-
-  void handle_status_leds(void) {
-    float max_temp = 0.0;
-    if (ELAPSED(millis(), next_status_led_update_ms)) {
-      next_status_led_update_ms += 500; // Update every 0.5s
-      for (int8_t cur_extruder = 0; cur_extruder < EXTRUDERS; ++cur_extruder)
-        max_temp = max(max(max_temp, degHotend(cur_extruder)), degTargetHotend(cur_extruder));
-      #if HAS_TEMP_BED
-        max_temp = max(max(max_temp, degTargetBed()), degBed());
-      #endif
-      bool new_led = (max_temp > 55.0) ? true : (max_temp < 54.0) ? false : red_led;
-      if (new_led != red_led) {
-        red_led = new_led;
-        digitalWrite(STAT_LED_RED, new_led ? HIGH : LOW);
-        digitalWrite(STAT_LED_BLUE, new_led ? LOW : HIGH);
-      }
-    }
-  }
-
-#endif
 
 void enable_all_steppers() {
   enable_x();

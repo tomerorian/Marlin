@@ -29,7 +29,7 @@
 /**
  * Marlin release version identifier
  */
-#define SHORT_BUILD_VERSION "1.1.0-RC6"
+#define SHORT_BUILD_VERSION ""1.1.0-RC6 (RoboR1+)"
 
 /**
  * Verbose version identifier which should contain a reference to the location
@@ -52,7 +52,7 @@
 /**
  * Defines a generic printer name to be output to the LCD after booting Marlin.
  */
-#define MACHINE_NAME "3D Printer"
+#define MACHINE_NAME "Robo3D R1+"
 
 /**
  * The SOURCE_CODE_URL is the location where users will find the Marlin Source
@@ -65,7 +65,7 @@
 /**
  * Default generic printer UUID.
  */
-#define DEFAULT_MACHINE_UUID "cede2a2f-41a2-4748-9b12-c55c62f367ff"
+#define DEFAULT_MACHINE_UUID "00000000-0000-0000-0000-000000000000"
 
 /**
  * The WEBSITE_URL is the location where users can get more information such as

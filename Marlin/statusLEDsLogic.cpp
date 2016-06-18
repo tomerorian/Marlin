@@ -7,9 +7,11 @@
 #if ENABLED(TEMP_STAT_LEDS)
 
 #include "pins.h"
+#include "Marlin.h"
 
 static const int LED_MAX = 160;
 static const int FLASH_ANIMATION_DELAY = 2;
+static const int ROOM_TEMP = 25;
 
 /**
 * Premade colors
@@ -83,6 +85,10 @@ public:
         }
     }
     
+    void setColorByPercent(float redPercent, float greenPrecent, float bluePercent) {
+        setColor(redPercent * LED_MAX, greenPrecent * LED_MAX, bluePercent * LED_MAX);
+    }
+    
     void applyChanges() {
         if (isDirty) {
             analogWrite(STAT_LED_RED, min(red, LED_MAX));
@@ -108,9 +114,6 @@ RGBLeds *forcedLeds = new RGBLeds();
 RGBLeds *leds = normalLeds;
 
 boolean shouldFlashLeds = true;
-
-int ExtTemp;
-int ExtTarg;
 
 /**
 * Logic
@@ -165,57 +168,33 @@ void perform_flash_animation() {
 }
 
 void perform_normal_leds_logic() {
+    int currentHeat = 0;
+    int targetHeat = 0;
+    
+    //TEMP_HYSTERESIS?
+    
     for (int8_t cur_extruder = 0; cur_extruder < EXTRUDERS; ++cur_extruder) {
-        ExtTemp = degHotend(cur_extruder);
-        ExtTarg = degTargetHotend(cur_extruder);
+        currentHeat += degHotend(cur_extruder) - ROOM_TEMP;
+        targetHeat += degTargetHotend(cur_extruder) - ROOM_TEMP;   
+    }
+    
+    currentHeat = max(currentHeat, 0);
+    targetHeat = max(targetHeat, 0);
+    
+    if (targetHeat == 0) {
+        // Cooling
         
-        if ((degTargetBed() == 71) || (degTargetBed() == 1)) {
-            leds->setColor(RGBColors_off);
-        }
+        leds->setColor(RGBColors_white);
+    } else {
+        // Heating
         
-        if (degTargetBed() == 100) {
-            leds->setColor(RGBColors_yellow);
-        }
-        
-        if (degTargetBed() == 69) {
-            leds->setColor(RGBColors_cyan);
-        }
-        
-        if ((ExtTarg == 0)&&(degTargetBed() == 0)) {
+        if (currentHeat >= targetHeat - TEMP_HYSTERESIS) {
             leds->setColor(RGBColors_white);
+            return;
         }
         
-        if ((ExtTarg != 0) &&
-                (degTargetBed() != 1) &&
-                (degTargetBed() != 69) &&
-                (degTargetBed() != 71) &&
-                (degTargetBed() != 100)) {
-            if((ExtTarg >= ExtTemp-TEMP_HYSTERESIS) &&
-                    (ExtTarg <= ExtTemp+TEMP_HYSTERESIS)) {
-                        leds->setColor(RGBColors_white);
-            } else if ((degTargetBed() == 5) && (degBed() <= 50)) {
-                leds->setColor(RGBColors_green);
-            } else {
-                int MidTemp = (((EXTRUDE_MINTEMP)-40)/2);
-                if (ExtTemp < 40){
-                    leds->setColor(RGBColors_blue);
-                }
-                
-                if (ExtTemp > EXTRUDE_MINTEMP){
-                    leds->setColor(RGBColors_red);
-                }
-                
-                if ((ExtTemp > 40) && (ExtTemp < MidTemp)) {
-                    int red = map(ExtTemp,40,MidTemp,0,LED_MAX);
-                    leds->setColor(red, 0, LED_MAX);
-                }
-                
-                if ((ExtTemp > MidTemp)&&(ExtTemp < EXTRUDE_MINTEMP)) {
-                    int blue = map(ExtTemp,MidTemp,EXTRUDE_MINTEMP,LED_MAX,0);
-                    leds->setColor(LED_MAX, 0, blue);
-                }
-            }
-        }   
+        float heatPercent = (float)currentHeat / targetHeat;
+        leds->setColorByPercent(2.0f * heatPercent, 0.0f, 2.0f * (1 - heatPercent));
     }
 }
 

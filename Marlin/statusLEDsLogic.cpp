@@ -85,9 +85,9 @@ public:
     
     void applyChanges() {
         if (isDirty) {
-            analogWrite(STAT_LED_RED, red);
-            analogWrite(STAT_LED_GREEN, green);
-            analogWrite(STAT_LED_BLUE, blue);
+            analogWrite(STAT_LED_RED, min(red, LED_MAX));
+            analogWrite(STAT_LED_GREEN, min(green, LED_MAX));
+            analogWrite(STAT_LED_BLUE, min(blue, LED_MAX));
             
             isDirty = false;
         }

@@ -1,123 +1,253 @@
+/**
+* Original idea and code where created by Marquis Johnson
+* New style and features by Tomer Orian
+**/
 #include "statusLEDsLogic.h"
 
 #if ENABLED(TEMP_STAT_LEDS)
 
 #include "pins.h"
 
-// Edit 01/24/2016 Marquis Johnson
-// Edit 05/22/2016 Tomer Orian
-static millis_t next_status_led_update_ms = 0;
-//Virtual Variables
-int t = 2;
-int Rval = 0;
-int Gval = 0;
-int Bval = 0;
-int forcedRedValue = 0;
-int forcedGreenValue = 0;
-int forcedBlueValue = 0;
-boolean forcedColorOn = false;
-boolean appliedForcedColor = true;
+static const int LED_MAX = 160;
+static const int FLASH_ANIMATION_DELAY = 2;
+
+/**
+* Premade colors
+*/
+enum RGBColors {
+    RGBColors_off,
+    RGBColors_white,
+    RGBColors_red,
+    RGBColors_green,
+    RGBColors_blue,
+    RGBColors_yellow,
+    RGBColors_cyan,
+    RGBColors_magenta
+};
+
+/**
+* Represents and controls the leds 
+*/
+class RGBLeds {
+    int red;
+    int green;
+    int blue;
+    
+    boolean isDirty;
+
+public:    
+    RGBLeds() {
+        red = 0;
+        green = 0;
+        blue = 0;
+        
+        isDirty = false;
+    }
+    
+    void setColor(int red, int green, int blue) {
+        if (red != this->red || green != this->green || blue != this->blue) {
+            this->red = red;
+            this->green = green;
+            this->blue = blue;
+            
+            isDirty = true;
+        }
+    }
+    
+    void setColor(RGBColors color) {
+        switch (color) {
+            case RGBColors_off:
+                setColor(0, 0, 0);
+                break;
+            case RGBColors_white:
+                setColor(LED_MAX, LED_MAX, LED_MAX);
+                break;
+            case RGBColors_red:
+                setColor(0, 0, 0);
+                break;
+            case RGBColors_green:
+                setColor(LED_MAX, 0, 0);
+                break;
+            case RGBColors_blue:
+                setColor(0, 0, LED_MAX);
+                break;
+            case RGBColors_yellow:
+                setColor(LED_MAX, LED_MAX, 0);
+                break;
+            case RGBColors_cyan:
+                setColor(0, LED_MAX, LED_MAX);
+                break;
+            case RGBColors_magenta:
+                setColor(LED_MAX, 0, LED_MAX);
+                break;
+        }
+    }
+    
+    void applyChanges() {
+        if (isDirty) {
+            analogWrite(STAT_LED_RED, red);
+            analogWrite(STAT_LED_GREEN, green);
+            analogWrite(STAT_LED_BLUE, blue);
+            
+            isDirty = false;
+        }
+    }
+    
+    void setDirty() {
+        isDirty = true;
+    }
+};
+
+/**
+* Variables
+*/
+static millis_t nextStatusLedUpdate = 0;
+
+RGBLeds *normalLeds = new RGBLeds();
+RGBLeds *forcedLeds = new RGBLeds();
+RGBLeds *leds = normalLeds;
+
 boolean shouldFlashLeds = true;
-int LEDmax = 160;
+
 int ExtTemp;
 int ExtTarg;
-//Static Colors
-void off(){Rval = 0;Gval = 0;Bval = 0;}
-void white(){Rval = LEDmax;Gval = LEDmax;Bval = LEDmax;}
-void red(){Rval = LEDmax;Gval = 0;Bval = 0;}
-void green(){Rval = 0;Gval = LEDmax;Bval = 0;}
-void blue(){Rval = 0;Gval = 0;Bval = LEDmax;}
-void yellow(){Rval = LEDmax;Gval = LEDmax;Bval = 0;}
-void cyan(){Rval = 0;Gval = LEDmax;Bval = LEDmax;}
-void magenta(){Rval = LEDmax;Gval = 0;Bval = LEDmax;}
 
-//Handle Led Status
-void handle_status_leds(void) {
-  if (shouldFlashLeds) {
-    appliedForcedColor = false;
+/**
+* Logic
+*/
+
+void perform_flash_animation() {
     shouldFlashLeds = false;
-    analogWrite(STAT_LED_RED, 0);
-    analogWrite(STAT_LED_GREEN, 0);
-    analogWrite(STAT_LED_BLUE, 0);
+    leds->setColor(RGBColors_off);
     
-    for(int r = 0; r < LEDmax; r++) { analogWrite(STAT_LED_RED, r); delay(t); }
-    for(int r = LEDmax; r > 0; r--) { analogWrite(STAT_LED_RED, r); delay(t); }
-    for(int g = 0; g < LEDmax; g++) { analogWrite(STAT_LED_GREEN, g); delay(t); }
-    for(int g = LEDmax; g > 0; g--) { analogWrite(STAT_LED_GREEN, g); delay(t); }
-    for(int b = 0; b < LEDmax; b++) { analogWrite(STAT_LED_BLUE, b); delay(t); }
-    for(int b = LEDmax; b>0; b--) { analogWrite(STAT_LED_BLUE, b); delay(t); }
-    for(int w = 0; w < LEDmax; w++) { analogWrite(STAT_LED_RED, w);analogWrite(STAT_LED_GREEN, w);analogWrite(STAT_LED_BLUE, w); delay(t); }
-  }
-
-  if (forcedColorOn) {
-    if (!appliedForcedColor) {
-      analogWrite(STAT_LED_RED, min(forcedRedValue, LEDmax));
-      analogWrite(STAT_LED_GREEN, min(forcedGreenValue, LEDmax));
-      analogWrite(STAT_LED_BLUE, min(forcedBlueValue, LEDmax));
-  
-      appliedForcedColor = true;
+    for(int r = 0; r < LED_MAX; r++) { 
+        leds->setColor(r, 0, 0); 
+        leds->applyChanges();
+        delay(FLASH_ANIMATION_DELAY);
     }
+    
+    for(int r = LED_MAX; r > 0; r--) { 
+        leds->setColor(r, 0, 0); 
+        leds->applyChanges();
+        delay(FLASH_ANIMATION_DELAY);
+    }
+    
+    for(int g = 0; g < LED_MAX; g++) { 
+        leds->setColor(0, g, 0); 
+        leds->applyChanges();
+        delay(FLASH_ANIMATION_DELAY);
+    }
+    
+    for(int g = LED_MAX; g > 0; g--) { 
+        leds->setColor(0, g, 0); 
+        leds->applyChanges();
+        delay(FLASH_ANIMATION_DELAY);
+    }
+    
+    for(int b = 0; b < LED_MAX; b++) { 
+        leds->setColor(0, 0, b); 
+        leds->applyChanges();
+        delay(FLASH_ANIMATION_DELAY);
+    }
+    
+    for(int b = LED_MAX; b > 0; b--) { 
+        leds->setColor(0, 0, b); 
+        leds->applyChanges();
+        delay(FLASH_ANIMATION_DELAY);
+    }
+    
+    
+    for(int w = 0; w < LED_MAX; w++) { 
+        leds->setColor(w, w, w); 
+        leds->applyChanges();
+        delay(FLASH_ANIMATION_DELAY);
+    }
+}
 
-    return;
-  }
-  
-  if (millis() > next_status_led_update_ms) {
-    next_status_led_update_ms = millis() + 500; // Update every 0.5s
-    for (int8_t cur_extruder = 0; cur_extruder < EXTRUDERS; ++cur_extruder){
-      ExtTemp = degHotend(cur_extruder);
-      ExtTarg = degTargetHotend(cur_extruder);
-      if ((degTargetBed() == 71) || (degTargetBed() == 1)) {off();}
-      if (degTargetBed() == 100) {yellow();}
-      if (degTargetBed() == 69) {cyan();}
-      if ((ExtTarg == 0)&&(degTargetBed() == 0)) {white();}
-      if ((ExtTarg != 0)
-        &&(degTargetBed() != 1)
-        &&(degTargetBed() != 69)
-        &&(degTargetBed() != 71)
-        &&(degTargetBed() != 100)){
-        if((ExtTarg >= ExtTemp-TEMP_HYSTERESIS)
-        &&(ExtTarg <= ExtTemp+TEMP_HYSTERESIS)) {white();}
-        else if ((degTargetBed() == 5)&&(degBed() <= 50)) {green();}
-        else {
-          int MidTemp = (((EXTRUDE_MINTEMP)-40)/2);
-          if (ExtTemp < 40){blue();}
-          if (ExtTemp > EXTRUDE_MINTEMP){red();}
-          if ((ExtTemp > 40) && (ExtTemp < MidTemp)) {
-            Rval = map(ExtTemp,40,MidTemp,0,LEDmax);
-            Gval = 0;  
-            Bval = LEDmax;
-          }
-          if ((ExtTemp > MidTemp)&&(ExtTemp < EXTRUDE_MINTEMP)) {
-            Rval = LEDmax;
-            Gval = 0;
-            Bval = map(ExtTemp,MidTemp,EXTRUDE_MINTEMP,LEDmax,0);
-          }
+void perform_normal_leds_logic() {
+    for (int8_t cur_extruder = 0; cur_extruder < EXTRUDERS; ++cur_extruder) {
+        ExtTemp = degHotend(cur_extruder);
+        ExtTarg = degTargetHotend(cur_extruder);
+        
+        if ((degTargetBed() == 71) || (degTargetBed() == 1)) {
+            leds->setColor(RGBColors_off);
         }
-      }
+        
+        if (degTargetBed() == 100) {
+            leds->setColor(RGBColors_yellow);
+        }
+        
+        if (degTargetBed() == 69) {
+            leds->setColor(RGBColors_cyan);
+        }
+        
+        if ((ExtTarg == 0)&&(degTargetBed() == 0)) {
+            leds->setColor(RGBColors_white);
+        }
+        
+        if ((ExtTarg != 0) &&
+                (degTargetBed() != 1) &&
+                (degTargetBed() != 69) &&
+                (degTargetBed() != 71) &&
+                (degTargetBed() != 100)) {
+            if((ExtTarg >= ExtTemp-TEMP_HYSTERESIS) &&
+                    (ExtTarg <= ExtTemp+TEMP_HYSTERESIS)) {
+                        leds->setColor(RGBColors_white);
+            } else if ((degTargetBed() == 5) && (degBed() <= 50)) {
+                leds->setColor(RGBColors_green);
+            } else {
+                int MidTemp = (((EXTRUDE_MINTEMP)-40)/2);
+                if (ExtTemp < 40){
+                    leds->setColor(RGBColors_blue);
+                }
+                
+                if (ExtTemp > EXTRUDE_MINTEMP){
+                    leds->setColor(RGBColors_red);
+                }
+                
+                if ((ExtTemp > 40) && (ExtTemp < MidTemp)) {
+                    int red = map(ExtTemp,40,MidTemp,0,LED_MAX);
+                    leds->setColor(red, 0, LED_MAX);
+                }
+                
+                if ((ExtTemp > MidTemp)&&(ExtTemp < EXTRUDE_MINTEMP)) {
+                    int blue = map(ExtTemp,MidTemp,EXTRUDE_MINTEMP,LED_MAX,0);
+                    leds->setColor(LED_MAX, 0, blue);
+                }
+            }
+        }   
+    }
+}
+
+void handle_status_leds(void) {
+    if (shouldFlashLeds) {
+        perform_flash_animation();
+    }
+  
+    if (leds == normalLeds && millis() > nextStatusLedUpdate) {
+        nextStatusLedUpdate = millis() + 500; // Update every 0.5s
+        
+        perform_normal_leds_logic();
     }
     
-    //Write to LEDs
-    analogWrite(STAT_LED_RED, Rval);
-    analogWrite(STAT_LED_GREEN, Gval);
-    analogWrite(STAT_LED_BLUE, Bval);
-  }
+    leds->applyChanges();
 }
 
 void status_leds_flash_leds() {
-  shouldFlashLeds = true;
+    shouldFlashLeds = true;
 }
 
 void status_leds_force_color(int r, int g, int b) {
-  forcedColorOn = true;
-  appliedForcedColor = false;
-  
-  forcedRedValue = r;
-  forcedGreenValue = g;
-  forcedBlueValue = b;
+    leds = forcedLeds;
+    
+    leds->setColor(r, g, b);
+    leds->setDirty();
 }
 
 void status_leds_disable_force_color() {
-  forcedColorOn = false;
+    leds = normalLeds;
+  
+    leds->setDirty();
 }
 
 #endif

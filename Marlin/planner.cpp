@@ -424,44 +424,44 @@ void plan_init() {
   }
 #endif //AUTOTEMP
 
+void calc_tail_fan_speed(unsigned long targetSpeeds[FAN_COUNT], unsigned char tail_fan_speed[FAN_COUNT]) {
+#if ENABLED(FAN_TEMP_SAFE_CHANGE)
+    boolean shouldChangeFanSpeed = true;
+    boolean isHeatOk = true;
+
+    if (millis() >= nextFanSpeedUpdate) {
+        nextFanSpeedUpdate = millis() + FAN_TEMP_SAFE_CHANGE_SPEED_FREQ;  
+        
+        for (int8_t cur_extruder = 0; cur_extruder < EXTRUDERS; ++cur_extruder) {
+            int currentHeat = degHotend(cur_extruder);
+            int targetHeat = degTargetHotend(cur_extruder);
+            
+            isHeatOk &= (targetHeat == 0 || (abs(targetHeat - currentHeat) <= FAN_TEMP_SAFE_CHANGE_DEGREE_VARIATION));
+        }
+    } else {
+        shouldChangeFanSpeed = false;
+    }
+
+    
+    for (uint8_t i = 0; i < FAN_COUNT; i++) {
+        if (shouldChangeFanSpeed) {
+            if (((curFanSpeeds[i] > targetSpeeds[i]) && isHeatOk) || ((curFanSpeeds[i] <= targetSpeeds[i]) && !isHeatOk)) {
+                curFanSpeeds[i] = max(0, curFanSpeeds[i] - FAN_TEMP_SAFE_CHANGE_SPEED_JUMPS);
+            } else if (((curFanSpeeds[i] < targetSpeeds[i]) && isHeatOk) || ((curFanSpeeds[i] >= targetSpeeds[i]) && !isHeatOk)) {
+                curFanSpeeds[i] = min(targetSpeeds[i], curFanSpeeds[i] + FAN_TEMP_SAFE_CHANGE_SPEED_JUMPS);
+            }
+        }
+        
+        tail_fan_speed[i] = curFanSpeeds[i];
+    }
+#else
+    for (uint8_t i = 0; i < FAN_COUNT; i++) tail_fan_speed[i] = targetSpeeds[i];
+#endif
+}
+
 void check_axes_activity() {
   unsigned char axis_active[NUM_AXIS] = { 0 },
                 tail_fan_speed[FAN_COUNT];
-
-    #if FAN_COUNT > 0
-    #if ENABLED(FAN_TEMP_SAFE_CHANGE)
-        boolean shouldChangeFanSpeed = true;
-        boolean isHeatOk = true;
-    
-        if (millis() >= nextFanSpeedUpdate) {
-            nextFanSpeedUpdate = millis() + FAN_TEMP_SAFE_CHANGE_SPEED_FREQ;  
-            
-            for (int8_t cur_extruder = 0; cur_extruder < EXTRUDERS; ++cur_extruder) {
-                int currentHeat = degHotend(cur_extruder);
-                int targetHeat = degTargetHotend(cur_extruder);
-                
-                isHeatOk &= (targetHeat == 0 || (abs(targetHeat - currentHeat) <= FAN_TEMP_SAFE_CHANGE_DEGREE_VARIATION));
-            }
-        } else {
-            shouldChangeFanSpeed = false;
-        }
-
-        
-        for (uint8_t i = 0; i < FAN_COUNT; i++) {
-            if (shouldChangeFanSpeed) {
-                if (((curFanSpeeds[i] > fanSpeeds[i]) && isHeatOk) || ((curFanSpeeds[i] <= fanSpeeds[i]) && !isHeatOk)) {
-                    curFanSpeeds[i] = max(0, curFanSpeeds[i] - FAN_TEMP_SAFE_CHANGE_SPEED_JUMPS);
-                } else if (((curFanSpeeds[i] < fanSpeeds[i]) && isHeatOk) || ((curFanSpeeds[i] >= fanSpeeds[i]) && !isHeatOk)) {
-                    curFanSpeeds[i] = min(fanSpeeds[i], curFanSpeeds[i] + FAN_TEMP_SAFE_CHANGE_SPEED_JUMPS);
-                }
-            }
-            
-            tail_fan_speed[i] = curFanSpeeds[i];
-        }
-    #else
-      for (uint8_t i = 0; i < FAN_COUNT; i++) tail_fan_speed[i] = fanSpeeds[i];
-    #endif
-    #endif
 
   #if ENABLED(BARICUDA)
     unsigned char tail_valve_pressure = baricuda_valve_pressure,
@@ -474,8 +474,9 @@ void check_axes_activity() {
 
     uint8_t block_index = block_buffer_tail;
 
+    // TODO: TOMERO: Do the hack here / also here ???
     #if FAN_COUNT > 0
-      for (uint8_t i = 0; i < FAN_COUNT; i++) tail_fan_speed[i] = block_buffer[block_index].fan_speed[i];
+      calc_tail_fan_speed(block_buffer[block_index].fan_speed, tail_fan_speed);
     #endif
 
     #if ENABLED(BARICUDA)
@@ -489,6 +490,14 @@ void check_axes_activity() {
       for (int i = 0; i < NUM_AXIS; i++) if (block->steps[i]) axis_active[i]++;
       block_index = next_block_index(block_index);
     }
+  } else {
+    #if FAN_COUNT > 0
+      unsigned long longFanSpeeds[FAN_COUNT];
+      for (int i = 0; i < FAN_COUNT; i++) {
+          longFanSpeeds[i] = fanSpeeds[i];
+      }
+      calc_tail_fan_speed(longFanSpeeds, tail_fan_speed);
+    #endif
   }
   #if ENABLED(DISABLE_X)
     if (!axis_active[X_AXIS]) disable_x();

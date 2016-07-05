@@ -151,6 +151,11 @@ uint8_t g_uc_extruder_last_move[EXTRUDERS] = { 0 };
   extern bool extruder_duplication_enabled;
 #endif
 
+#if ENABLED(FAN_TEMP_SAFE_CHANGE) && FAN_COUNT > 0
+    int curFanSpeeds[FAN_COUNT];
+    millis_t nextFanSpeedUpdate = 0;
+#endif
+
 //===========================================================================
 //================================ functions ================================
 //===========================================================================
@@ -423,9 +428,40 @@ void check_axes_activity() {
   unsigned char axis_active[NUM_AXIS] = { 0 },
                 tail_fan_speed[FAN_COUNT];
 
-  #if FAN_COUNT > 0
-    for (uint8_t i = 0; i < FAN_COUNT; i++) tail_fan_speed[i] = fanSpeeds[i];
-  #endif
+    #if FAN_COUNT > 0
+    #if ENABLED(FAN_TEMP_SAFE_CHANGE)
+        boolean shouldChangeFanSpeed = true;
+    
+        if (millis() >= nextFanSpeedUpdate) {
+            nextFanSpeedUpdate = millis() + FAN_TEMP_SAFE_CHANGE_SPEED_FREQ;
+           
+            
+            for (int8_t cur_extruder = 0; cur_extruder < EXTRUDERS; ++cur_extruder) {
+                int currentHeat = degHotend(cur_extruder);
+                int targetHeat = degTargetHotend(cur_extruder);
+                
+                shouldChangeFanSpeed &= (targetHeat == 0 || abs(targetHeat - currentHeat) <= FAN_TEMP_SAFE_CHANGE_DEGREE_VARIATION);
+            }
+        } else {
+            shouldChangeFanSpeed = false;
+        }
+
+        
+        for (uint8_t i = 0; i < FAN_COUNT; i++) {
+            if (shouldChangeFanSpeed) {
+                if (curFanSpeeds[i] > fanSpeeds[i]) {
+                    curFanSpeeds[i] = max(0, curFanSpeeds[i] - FAN_TEMP_SAFE_CHANGE_SPEED_JUMPS);
+                } else if (curFanSpeeds[i] < fanSpeeds[i]) {
+                    curFanSpeeds[i] = min(fanSpeeds[i], curFanSpeeds[i] + FAN_TEMP_SAFE_CHANGE_SPEED_JUMPS);
+                }
+            }
+            
+            tail_fan_speed[i] = curFanSpeeds[i];
+        }
+    #else
+      for (uint8_t i = 0; i < FAN_COUNT; i++) tail_fan_speed[i] = fanSpeeds[i];
+    #endif
+    #endif
 
   #if ENABLED(BARICUDA)
     unsigned char tail_valve_pressure = baricuda_valve_pressure,

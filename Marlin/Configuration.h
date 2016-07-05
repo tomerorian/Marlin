@@ -1028,6 +1028,18 @@ const bool Z_MIN_PROBE_ENDSTOP_INVERTING = true; //--ROBO-BH set to true to inve
 // at zero value, there are 128 effective control positions.
 #define SOFT_PWM_SCALE 0
 
+// Uncomment if you want the the fans speed to change gradually to save the temp in a given range
+#define FAN_TEMP_SAFE_CHANGE
+
+// Amount of degrees of variation (both up and down)
+#define FAN_TEMP_SAFE_CHANGE_DEGREE_VARIATION 5
+
+// Amount to increase / decrease between checks
+#define FAN_TEMP_SAFE_CHANGE_SPEED_JUMPS 10
+
+// Time between fan speed changes (millis)
+#define FAN_TEMP_SAFE_CHANGE_SPEED_FREQ 1000
+
 // Temperature status LEDs that display the hotend and bet temperature.
 // If all hotends and bed temperature and temperature setpoint are < 54C then the BLUE led is on.
 // Otherwise the RED led is on. There is 1C hysteresis.

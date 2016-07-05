@@ -431,16 +431,16 @@ void check_axes_activity() {
     #if FAN_COUNT > 0
     #if ENABLED(FAN_TEMP_SAFE_CHANGE)
         boolean shouldChangeFanSpeed = true;
+        boolean isHeatOk = true;
     
         if (millis() >= nextFanSpeedUpdate) {
-            nextFanSpeedUpdate = millis() + FAN_TEMP_SAFE_CHANGE_SPEED_FREQ;
-           
+            nextFanSpeedUpdate = millis() + FAN_TEMP_SAFE_CHANGE_SPEED_FREQ;  
             
             for (int8_t cur_extruder = 0; cur_extruder < EXTRUDERS; ++cur_extruder) {
                 int currentHeat = degHotend(cur_extruder);
                 int targetHeat = degTargetHotend(cur_extruder);
                 
-                shouldChangeFanSpeed &= (targetHeat == 0 || abs(targetHeat - currentHeat) <= FAN_TEMP_SAFE_CHANGE_DEGREE_VARIATION);
+                isHeatOk &= (targetHeat == 0 || (abs(targetHeat - currentHeat) <= FAN_TEMP_SAFE_CHANGE_DEGREE_VARIATION));
             }
         } else {
             shouldChangeFanSpeed = false;
@@ -449,9 +449,9 @@ void check_axes_activity() {
         
         for (uint8_t i = 0; i < FAN_COUNT; i++) {
             if (shouldChangeFanSpeed) {
-                if (curFanSpeeds[i] > fanSpeeds[i]) {
+                if (((curFanSpeeds[i] > fanSpeeds[i]) && isHeatOk) || ((curFanSpeeds[i] <= fanSpeeds[i]) && !isHeatOk)) {
                     curFanSpeeds[i] = max(0, curFanSpeeds[i] - FAN_TEMP_SAFE_CHANGE_SPEED_JUMPS);
-                } else if (curFanSpeeds[i] < fanSpeeds[i]) {
+                } else if (((curFanSpeeds[i] < fanSpeeds[i]) && isHeatOk) || ((curFanSpeeds[i] >= fanSpeeds[i]) && !isHeatOk)) {
                     curFanSpeeds[i] = min(fanSpeeds[i], curFanSpeeds[i] + FAN_TEMP_SAFE_CHANGE_SPEED_JUMPS);
                 }
             }

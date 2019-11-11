@@ -342,6 +342,9 @@ class Planner {
       );
     }
 
+    // Calc fans actual wanted speed
+    static void calc_tail_fan_speed(uint16_t targetSpeeds[FAN_COUNT], unsigned char tail_fan_speed[FAN_COUNT]);
+
     // Manage fans, paste pressure, etc.
     static void check_axes_activity();
 

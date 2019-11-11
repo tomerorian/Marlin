@@ -188,6 +188,11 @@ float Planner::e_factor[EXTRUDERS] = ARRAY_BY_EXTRUDERS1(1.0f); // The flow perc
   bool Planner::autotemp_enabled = false;
 #endif
 
+#if ENABLED(FAN_TEMP_SAFE_CHANGE) && FAN_COUNT > 0
+    int curFanSpeeds[FAN_COUNT];
+    millis_t nextFanSpeedUpdate = 0;
+#endif
+
 // private:
 
 int32_t Planner::position[NUM_AXIS] = { 0 };
@@ -1165,6 +1170,41 @@ void Planner::recalculate() {
 
 #endif // AUTOTEMP
 
+void Planner::calc_tail_fan_speed(uint16_t targetSpeeds[FAN_COUNT], unsigned char tail_fan_speed[FAN_COUNT]) {
+#if ENABLED(FAN_TEMP_SAFE_CHANGE)
+    boolean shouldChangeFanSpeed = true;
+    boolean isHeatOk = true;
+
+    if (millis() >= nextFanSpeedUpdate) {
+        nextFanSpeedUpdate = millis() + FAN_TEMP_SAFE_CHANGE_SPEED_FREQ;  
+
+        for (int8_t cur_extruder = 0; cur_extruder < EXTRUDERS; ++cur_extruder) {
+            int currentHeat = thermalManager.degHotend(cur_extruder);
+            int targetHeat = thermalManager.degTargetHotend(cur_extruder);
+
+            isHeatOk &= (targetHeat == 0 || (abs(targetHeat - currentHeat) <= FAN_TEMP_SAFE_CHANGE_DEGREE_VARIATION));
+        }
+    } else {
+        shouldChangeFanSpeed = false;
+    }
+
+
+    for (uint8_t i = 0; i < FAN_COUNT; i++) {
+        if (shouldChangeFanSpeed) {
+            if (((curFanSpeeds[i] > targetSpeeds[i]) && isHeatOk) || ((curFanSpeeds[i] <= targetSpeeds[i]) && !isHeatOk)) {
+                curFanSpeeds[i] = max(0, curFanSpeeds[i] - FAN_TEMP_SAFE_CHANGE_SPEED_JUMPS);
+            } else if (((curFanSpeeds[i] < targetSpeeds[i]) && isHeatOk) || ((curFanSpeeds[i] >= targetSpeeds[i]) && !isHeatOk)) {
+                curFanSpeeds[i] = min(targetSpeeds[i], curFanSpeeds[i] + FAN_TEMP_SAFE_CHANGE_SPEED_JUMPS);
+            }
+        }
+
+        tail_fan_speed[i] = curFanSpeeds[i];
+    }
+#else
+    for (uint8_t i = 0; i < FAN_COUNT; i++) tail_fan_speed[i] = targetSpeeds[i];
+#endif
+}
+
 /**
  * Maintain fans, paste extruder pressure,
  */
@@ -1184,8 +1224,7 @@ void Planner::check_axes_activity() {
   if (has_blocks_queued()) {
 
     #if FAN_COUNT > 0
-      for (uint8_t i = 0; i < FAN_COUNT; i++)
-        tail_fan_speed[i] = block_buffer[block_buffer_tail].fan_speed[i];
+      calc_tail_fan_speed(block_buffer[block_buffer_tail].fan_speed, tail_fan_speed);
     #endif
 
     block_t* block;
@@ -1207,7 +1246,7 @@ void Planner::check_axes_activity() {
   }
   else {
     #if FAN_COUNT > 0
-      for (uint8_t i = 0; i < FAN_COUNT; i++) tail_fan_speed[i] = fanSpeeds[i];
+      calc_tail_fan_speed(fanSpeeds, tail_fan_speed);
     #endif
 
     #if ENABLED(BARICUDA)

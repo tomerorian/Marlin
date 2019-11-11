@@ -1707,6 +1707,17 @@
                               // Default behaviour is limited to Z axis only.
 #endif
 
+/**
+ * Makes the fan speed change gradually while watching the hotend temp
+ * Compensating with fan speed in case hotend temp changes too drastically
+ */
+#define FAN_TEMP_SAFE_CHANGE
+#if ENABLED(FAN_TEMP_SAFE_CHANGE)
+  #define FAN_TEMP_SAFE_CHANGE_DEGREE_VARIATION 2 // Amount of degrees (C) of variation (both up and down)
+  #define FAN_TEMP_SAFE_CHANGE_SPEED_JUMPS 5 // Fan speed % to increase / decrease between checks
+  #define FAN_TEMP_SAFE_CHANGE_SPEED_FREQ 500 // Time between fan speed changes (millis)
+#endif
+
 // Enable Marlin dev mode which adds some special commands
 //#define MARLIN_DEV_MODE
 
